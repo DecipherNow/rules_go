@@ -30,9 +30,12 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"unicode"
 )
+
+var linkLine = regexp.MustCompile(`^//go:cgo_ldflag ".*/envoy/.*\.(o|lo|a)"$`)
 
 func run(args []string) error {
 	args, err := readParamsFiles(args)
@@ -214,6 +217,35 @@ func run(args []string) error {
 			return err
 		}
 	}
+
+	// Begin hack
+	// 1. Determine path to _cgo_gotypes.go
+	for objDir, _ := range objDirs {
+		gotypesPath := filepath.Join(objDir, "_cgo_gotypes.go")
+
+		dat, err := ioutil.ReadFile(gotypesPath)
+		if err != nil {
+			return err
+		}
+
+		// 2. Add --{,no-}whole-archive around each linked object/archive
+		lines := []string{}
+		for _, line := range strings.Split(string(dat), "\n") {
+			if linkLine.MatchString(line) {
+				lines = append(lines, `//go:cgo_ldflag "-Wl,--whole-archive"`)
+				lines = append(lines, line)
+				lines = append(lines, `//go:cgo_ldflag "-Wl,--no-whole-archive"`)
+			} else {
+				lines = append(lines, line)
+			}
+		}
+
+		err = ioutil.WriteFile(gotypesPath, []byte(strings.Join(lines, "\n")), 0555)
+		if err != nil {
+			return err
+		}
+	}
+	// End hack
 
 	return nil
 }
