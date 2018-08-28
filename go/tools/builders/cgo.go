@@ -26,6 +26,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"strings"
 	"unicode"
 )
@@ -218,9 +219,14 @@ func run(args []string) error {
 	lines := []string{}
 	for _, line := range strings.Split(string(dat), "\n") {
 		if linkLine.MatchString(line) {
-			lines = append(lines, `//go:cgo_ldflag "-Wl,--whole-archive"`)
-			lines = append(lines, line)
-			lines = append(lines, `//go:cgo_ldflag "-Wl,--no-whole-archive"`)
+			if runtime.GOOS != "darwin" {
+				lines = append(lines, `//go:cgo_ldflag "-Wl,--whole-archive"`)
+				lines = append(lines, line)
+				lines = append(lines, `//go:cgo_ldflag "-Wl,--no-whole-archive"`)
+			} else {
+				lines = append(lines, `//go:cgo_ldflag "-Wl,-force_load"`)
+				lines = append(lines, line)
+			}
 		} else {
 			lines = append(lines, line)
 		}
