@@ -36,7 +36,7 @@ import (
 	"unicode"
 )
 
-var linkLine = regexp.MustCompile(`^//go:cgo_ldflag ".*/envoy/.*\.(o|lo|a)"$`)
+var linkLine = regexp.MustCompile(`^//go:cgo_ldflag ".*/(envoy|istio)/.*\.(o|lo|a)"$`)
 
 func run(args []string) error {
 	args, err := readParamsFiles(args)
