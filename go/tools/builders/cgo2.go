@@ -23,8 +23,10 @@ package main
 import (
 	"bytes"
 	"fmt"
+	"io/ioutil"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 )
 
@@ -136,6 +138,38 @@ func cgo2(goenv *env, goSrcs, cgoSrcs, cSrcs, cxxSrcs, objcSrcs, objcxxSrcs, sSr
 	if err := goenv.runCommand(args); err != nil {
 		return "", nil, nil, err
 	}
+
+	// Begin hack
+	// 1. Determine path to _cgo_gotypes.go
+	gotypesPath := filepath.Join(workDir, "_cgo_gotypes.go")
+
+	dat, err := ioutil.ReadFile(gotypesPath)
+	if err != nil {
+		return "", nil, nil, err
+	}
+
+	// 2. Add --{,no-}whole-archive around each linked object/archive
+	lines := []string{}
+	for _, line := range strings.Split(string(dat), "\n") {
+		if linkLine.MatchString(line) {
+			if runtime.GOOS != "darwin" {
+				lines = append(lines, `//go:cgo_ldflag "-Wl,--whole-archive"`)
+				lines = append(lines, line)
+				lines = append(lines, `//go:cgo_ldflag "-Wl,--no-whole-archive"`)
+			} else {
+				lines = append(lines, `//go:cgo_ldflag "-Wl,-force_load"`)
+				lines = append(lines, line)
+			}
+		} else {
+			lines = append(lines, line)
+		}
+	}
+
+	err = ioutil.WriteFile(gotypesPath, []byte(strings.Join(lines, "\n")), 0555)
+	if err != nil {
+		return "", nil, nil, err
+	}
+	// End hack
 
 	if cgoExportHPath != "" {
 		if err := copyFile(filepath.Join(workDir, "_cgo_export.h"), cgoExportHPath); err != nil {
